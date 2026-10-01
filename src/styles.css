@@ -1,5 +1,7 @@
+/* Generate Tailwind utilities used by className throughout the React UI. */
 @import "tailwindcss";
 
+/* Defaults shared by every page. Roboto is imported once in main.tsx. */
 @layer base {
   html {
     font-family: "Roboto Variable", Roboto, ui-sans-serif, system-ui, sans-serif;
@@ -20,16 +22,19 @@
 }
 
 @layer components {
+  /* Electron's frameless window uses this title-bar region for dragging. */
   .app-drag {
     -webkit-app-region: drag;
     user-select: none;
   }
 
+  /* Buttons must opt out of dragging to receive normal mouse clicks. */
   .app-no-drag,
   .app-no-drag * {
     -webkit-app-region: no-drag;
   }
 
+  /* Shared sizing for the close, minimize, and maximize circles. */
   .window-control {
     display: grid;
     width: 12px;
@@ -42,6 +47,7 @@
   }
 }
 
+/* Chromium/Electron scrollbar styling keeps the scrollbars in the dark theme. */
 @layer utilities {
   ::-webkit-scrollbar {
     width: 10px;

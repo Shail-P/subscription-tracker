@@ -3,10 +3,14 @@ import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { DashboardPage } from "./DashboardPage";
 
+// Keep this in sync with electron/main.cjs and Supabase's allowed redirect URLs.
+// Google's browser flow returns to Electron's local callback server at this address.
 const AUTH_CALLBACK_URL = "http://127.0.0.1:57432/auth/callback";
 
 export function LoginPage() {
+  // A session contains the authenticated user and tokens; null displays the login page.
   const [session, setSession] = useState<Session | null>(null);
+  // This tracks an OAuth attempt, not the initial restoration of a saved session.
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -14,14 +18,18 @@ export function LoginPage() {
     const client = supabase;
     if (!client) return;
 
+    // Restore the locally persisted session so restarting the app does not require login.
     void client.auth.getSession().then(({ data }) => {
       setSession(data.session);
     });
 
+    // Keep the rendered page in sync with sign-in, token refresh, and sign-out events.
     const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
     });
 
+    // The main process receives the browser redirect and forwards its URL through preload.
+    // onCallback returns a function that removes this listener when the effect is cleaned up.
     const removeCallbackListener = window.electronAuth.onCallback(
       async (callbackUrl) => {
         const code = new URL(callbackUrl).searchParams.get("code");
@@ -34,6 +42,8 @@ export function LoginPage() {
           return;
         }
 
+        // Complete PKCE using the callback code and this client's saved code verifier.
+        // A successful exchange triggers the auth listener above with the new session.
         const { error } = await client.auth.exchangeCodeForSession(code);
         setIsLoading(false);
 
@@ -41,6 +51,8 @@ export function LoginPage() {
       },
     );
 
+    // Remove both subscriptions on unmount (and during development effect re-runs)
+    // so old listeners do not process the same sign-in more than once.
     return () => {
       data.subscription.unsubscribe();
       removeCallbackListener();
@@ -58,6 +70,7 @@ export function LoginPage() {
     setErrorMessage("");
     setIsLoading(true);
 
+    // Ask Supabase for the Google sign-in URL, without navigating the Electron renderer.
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -72,6 +85,8 @@ export function LoginPage() {
       return;
     }
 
+    // The preload bridge asks Electron to start the callback server and open the URL
+    // in the system browser. Loading stays true until a callback or opening failure.
     try {
       await window.electronAuth.openOAuth(data.url);
     } catch (error) {
@@ -84,11 +99,14 @@ export function LoginPage() {
     }
   }
 
+  // The auth-state listener updates session after a successful sign-out.
   async function handleSignOut() {
     setErrorMessage("");
     await supabase?.auth.signOut();
   }
 
+  // This conditional switches pages without a router. The user ID identifies database
+  // ownership; the email is for display, and onSignOut lets the dashboard request logout.
   if (session) {
     return (
       <DashboardPage
@@ -143,6 +161,7 @@ export function LoginPage() {
           {isLoading ? "Opening Google…" : "Continue with Google"}
         </button>
 
+        {/* Show setup, OAuth-start, or callback errors reported by the handlers above. */}
         {errorMessage && (
           <p
             className="mt-5 rounded-2xl bg-[#3c1f1f] px-4 py-3 text-center text-sm leading-5 text-[#f2b8b5]"

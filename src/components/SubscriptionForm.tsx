@@ -2,7 +2,9 @@
 // SubmitEvent is the TypeScript type for a form submission.
 import { useState, type SubmitEvent } from "react";
 
-// This type describes one complete subscription.
+// Shared application data shape, also imported by DashboardPage and the list.
+// TypeScript checks this shape during development; types do not validate
+// database responses at runtime.
 export type Subscription = {
   // A unique identifier for the subscription.
   id: string;
@@ -10,14 +12,15 @@ export type Subscription = {
   // The service name, such as Netflix.
   subscriptionName: string;
 
-  // The amount paid every month.
+  // The amount paid for the selected billing period.
   subscriptionPrice: number;
 
-  // The date when the subscription renews.
-  renewalDate: string;
+  // A union limits the allowed frequencies. Biweekly means every two weeks.
+  billingFrequency: "weekly" | "biweekly" | "monthly" | "yearly";
 };
 
-// These are the functions the parent must give to SubscriptionForm.
+// The form collects data; DashboardPage decides how to save it or close it.
+// These callback props let the child notify its parent without owning the list.
 type SubscriptionFormProps = {
   // Sends the completed subscription to the parent.
   onAddSubscription: (subscription: Subscription) => void;
@@ -31,10 +34,13 @@ export function SubscriptionForm({
   onAddSubscription,
   onCancel,
 }: SubscriptionFormProps) {
-  // Store the current value of each input.
+  // Each pair contains the current value and a setter that triggers a render.
+  // Keep price as a string so the field can be empty while the user types.
   const [subscriptionName, setSubscriptionName] = useState("");
   const [subscriptionPrice, setSubscriptionPrice] = useState("");
-  const [renewalDate, setRenewalDate] = useState("");
+  // Indexed access reuses the union defined on Subscription above.
+  const [billingFrequency, setBillingFrequency] =
+    useState<Subscription["billingFrequency"]>("monthly");
 
   // Run this function when the user submits the form.
   function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
@@ -52,25 +58,26 @@ export function SubscriptionForm({
       // HTML inputs return strings, so convert the price to a number.
       subscriptionPrice: Number(subscriptionPrice),
 
-      // Use the selected date.
-      renewalDate,
+      // Use the selected billing frequency.
+      billingFrequency,
     };
 
-    // Send the finished object to the parent component.
+    // This calls DashboardPage's handleAddSubscription through the prop.
+    // The parent saves asynchronously; this form does not await the result.
     onAddSubscription(newSubscription);
 
-    // Clear the form after submission.
+    // Reset immediately after calling the parent, before its save completes.
     setSubscriptionName("");
     setSubscriptionPrice("");
-    setRenewalDate("");
+    setBillingFrequency("monthly");
   }
 
-  // Keep the submit button disabled until every value is valid.
+  // Disable submission for blank names/prices or a nonpositive price.
+  // required, min, and step on the inputs also provide browser validation.
   const isFormIncomplete =
     subscriptionName.trim() === "" ||
     subscriptionPrice === "" ||
-    Number(subscriptionPrice) <= 0 ||
-    renewalDate === "";
+    Number(subscriptionPrice) <= 0;
 
   return (
     <form
@@ -88,9 +95,10 @@ export function SubscriptionForm({
 
       {/* Add equal vertical spacing between the fields. */}
       <div className="mt-8 space-y-6">
-        {/* Subscription name field */}
+        {/* value reads React state; onChange saves edits: a controlled input. */}
         <div>
           <label
+            // Matches the input id, so clicking the label focuses the field.
             htmlFor="subscription-name"
             className="mb-2 block text-sm text-[#c4c7c5]"
           >
@@ -112,13 +120,13 @@ export function SubscriptionForm({
           />
         </div>
 
-        {/* Monthly price field */}
+        {/* The price applies to the selected period, not always to a month. */}
         <div>
           <label
             htmlFor="subscription-price"
             className="mb-2 block text-sm text-[#c4c7c5]"
           >
-            Monthly price
+            Subscription price
           </label>
 
           {/* relative allows the dollar sign to sit inside the input. */}
@@ -144,26 +152,51 @@ export function SubscriptionForm({
           </div>
         </div>
 
-        {/* Renewal date field */}
+        {/* The default is monthly; the select always holds one of these values. */}
         <div>
           <label
-            htmlFor="renewal-date"
+            htmlFor="billing-frequency"
             className="mb-2 block text-sm text-[#c4c7c5]"
           >
-            Renewal date
+            Billing frequency
           </label>
 
-          <input
-            id="renewal-date"
-            type="date"
-            value={renewalDate}
-            onChange={(event) => {
-              // Save the selected date in state.
-              setRenewalDate(event.target.value);
-            }}
-            required
-            className="w-full rounded-xl border border-white/15 bg-[#131416] px-4 py-3 text-white outline-none transition focus:border-[#a8c7fa] focus:ring-2 focus:ring-[#a8c7fa]/20"
-          />
+          <div className="relative">
+            <select
+              id="billing-frequency"
+              value={billingFrequency}
+              onChange={(event) => {
+                // DOM values are strings. This assertion tells TypeScript
+                // the value belongs to our union because we control the options;
+                // it does not perform a runtime check or convert the value.
+                setBillingFrequency(
+                  event.target.value as Subscription["billingFrequency"],
+                );
+              }}
+              className="w-full appearance-none rounded-xl border border-white/15 bg-[#131416] py-3 pl-4 pr-14 text-white outline-none transition focus:border-[#a8c7fa] focus:ring-2 focus:ring-[#a8c7fa]/20"
+            >
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Biweekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+
+            {/* appearance-none hides the native arrow. This custom chevron
+                is inset from the right; pointer-events-none keeps clicks
+                on the arrow going to the select underneath. */}
+            <svg
+              className="pointer-events-none absolute right-5 top-1/2 size-5 -translate-y-1/2 text-[#c4c7c5]"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m7 10 5 5 5-5" />
+            </svg>
+          </div>
         </div>
       </div>
 
