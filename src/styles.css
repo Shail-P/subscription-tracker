@@ -6,18 +6,43 @@
   html {
     font-family: "Roboto Variable", Roboto, ui-sans-serif, system-ui, sans-serif;
     text-rendering: optimizeLegibility;
+    color-scheme: dark;
     scrollbar-color: #45474d #0f1115;
     scrollbar-width: thin;
+    /* Reserve scrollbar space so opening a modal does not shift the page. */
+    scrollbar-gutter: stable;
   }
 
   body {
     min-width: 320px;
     min-height: 100vh;
-    background: #020617;
+    margin: 0;
+    background: #0f1115;
+    -webkit-font-smoothing: antialiased;
   }
 
   button {
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  /* A visible keyboard focus remains available even on custom icon buttons. */
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid #a8c7fa;
+    outline-offset: 4px;
+  }
+
+  ::selection {
+    color: #062e6f;
+    background: #a8c7fa;
   }
 }
 
@@ -45,6 +70,183 @@
     border-radius: 999px;
     padding: 0;
   }
+
+  /* Animate opacity and transform rather than layout, keeping frames light. */
+  .motion-page {
+    animation: page-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .motion-card {
+    animation: card-enter 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .motion-section {
+    animation: section-enter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--enter-delay, 0ms);
+  }
+
+  .motion-row {
+    animation: row-enter 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: var(--enter-delay, 0ms);
+    transition: background-color 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .motion-button {
+    transition-property: transform, color, background-color, border-color, box-shadow, opacity;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform: translateY(0) scale(1);
+    touch-action: manipulation;
+  }
+
+  .motion-button:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+    transition-duration: 100ms;
+  }
+
+  .motion-button:disabled {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .motion-field {
+    transition-property: border-color, background-color, box-shadow, outline-color;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .motion-feedback {
+    animation: feedback-enter 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  /* Keep the custom title bar available while the rest of the UI is dimmed. */
+  .modal-backdrop {
+    position: fixed;
+    inset: 2.5rem 0 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem;
+    background-color: rgb(0 0 0 / 0.65);
+    opacity: 0;
+    backdrop-filter: blur(5px);
+    transition-property: opacity, background-color;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .modal-backdrop[data-state="open"] {
+    opacity: 1;
+  }
+
+  .modal-backdrop[data-state="closed"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* The panel scrolls on short windows instead of moving actions off-screen. */
+  .modal-panel {
+    position: relative;
+    width: min(100%, 32rem);
+    max-height: calc(100svh - 2.5rem - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 1.75rem;
+    background: #1e1f20;
+    box-shadow: 0 24px 80px rgb(0 0 0 / 0.35);
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+    transition-property: opacity, transform;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .modal-panel[data-state="open"] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transition-duration: 280ms;
+  }
+
+  .modal-panel[data-state="closed"] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+    transition-duration: 180ms;
+  }
+
+  .loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-turn 750ms linear infinite;
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: rgb(255 255 255 / 0.06);
+  }
+
+  /* A narrow, low-contrast highlight avoids flashing the whole loading view. */
+  .skeleton::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.055), transparent);
+    transform: translateX(-100%);
+    animation: skeleton-shimmer 1600ms ease-in-out infinite;
+  }
+
+  /* Hover changes only apply to devices with a real hover-capable pointer. */
+  @media (hover: hover) and (pointer: fine) {
+    .motion-button:hover:not(:disabled):not(:active) {
+      transform: translateY(-1px) scale(1);
+      box-shadow: 0 4px 12px rgb(0 0 0 / 0.14);
+    }
+
+    .motion-row:hover {
+      background-color: rgb(255 255 255 / 0.025);
+    }
+  }
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes section-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes row-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes feedback-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes spinner-turn {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes skeleton-shimmer {
+  to { transform: translateX(100%); }
 }
 
 /* Chromium/Electron scrollbar styling keeps the scrollbars in the dark theme. */
@@ -66,5 +268,58 @@
 
   ::-webkit-scrollbar-thumb:hover {
     background: #6b6e75;
+  }
+}
+
+/* Short app windows get tighter form spacing. Errors or exceptionally small
+   viewports can still scroll inside the panel without hiding the title bar. */
+@media (max-height: 640px) {
+  .subscription-form {
+    padding: 1rem;
+  }
+
+  .subscription-form-fields {
+    margin-top: 1.25rem;
+    gap: 1rem;
+  }
+
+  .subscription-form-actions {
+    margin-top: 1.25rem;
+  }
+}
+
+/* Honor the operating-system motion preference, including delayed entrances. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .motion-page,
+  .motion-card,
+  .motion-section,
+  .motion-row,
+  .motion-feedback,
+  .motion-button,
+  .motion-button:hover,
+  .motion-button:active,
+  .modal-panel {
+    transform: none !important;
+  }
+
+  /* Tailwind can also set the individual scale/translate CSS properties. */
+  .motion-button,
+  .motion-button:hover,
+  .motion-button:active {
+    scale: 1 !important;
+    translate: none !important;
+  }
+
+  .skeleton::after {
+    display: none;
   }
 }

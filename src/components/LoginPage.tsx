@@ -10,18 +10,24 @@ const AUTH_CALLBACK_URL = "http://127.0.0.1:57432/auth/callback";
 export function LoginPage() {
   // A session contains the authenticated user and tokens; null displays the login page.
   const [session, setSession] = useState<Session | null>(null);
+  // Wait for the saved session before choosing a page, avoiding a login flash.
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
   // This tracks an OAuth attempt, not the initial restoration of a saved session.
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const client = supabase;
-    if (!client) return;
+    if (!client) {
+      setIsRestoringSession(false);
+      return;
+    }
 
     // Restore the locally persisted session so restarting the app does not require login.
-    void client.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-    });
+    void client.auth.getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch(() => setErrorMessage("Couldn’t restore your session. Please sign in again."))
+      .finally(() => setIsRestoringSession(false));
 
     // Keep the rendered page in sync with sign-in, token refresh, and sign-out events.
     const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
@@ -105,6 +111,14 @@ export function LoginPage() {
     await supabase?.auth.signOut();
   }
 
+  if (isRestoringSession) {
+    return (
+      <main className="motion-page grid min-h-[calc(100svh-2.5rem)] place-items-center bg-[#0f1115]" role="status" aria-label="Opening SubTrack">
+        <span className="loading-spinner text-[#a8c7fa]" aria-hidden="true" />
+      </main>
+    );
+  }
+
   // This conditional switches pages without a router. The user ID identifies database
   // ownership; the email is for display, and onSignOut lets the dashboard request logout.
   if (session) {
@@ -118,8 +132,8 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-[calc(100svh-2.5rem)] place-items-center bg-[#0f1115] px-4 py-8 sm:px-6">
-      <section className="w-full max-w-md rounded-[28px] bg-[#1e1f20] px-6 py-9 sm:px-10 sm:py-11">
+    <main className="motion-page grid min-h-[calc(100svh-2.5rem)] place-items-center bg-[#0f1115] px-4 py-8 sm:px-6">
+      <section className="motion-card w-full max-w-md rounded-[28px] bg-[#1e1f20] px-6 py-9 sm:px-10 sm:py-11">
         <div className="text-center">
           <p className="text-sm font-medium text-[#a8c7fa]">SubTrack</p>
           <h1 className="mt-3 text-3xl font-normal tracking-tight text-white sm:text-4xl">
@@ -131,12 +145,13 @@ export function LoginPage() {
         </div>
 
         <button
-          className="mt-9 flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-[#a8c7fa] px-5 py-3 text-sm font-medium text-[#062e6f] transition hover:bg-[#d3e3fd] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a8c7fa] active:scale-[0.99] disabled:cursor-wait disabled:opacity-60 sm:text-base"
+          className="motion-button mt-9 flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-[#a8c7fa] px-5 py-3 text-sm font-medium text-[#062e6f] hover:bg-[#d3e3fd] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a8c7fa] disabled:cursor-wait disabled:opacity-60 sm:text-base"
           type="button"
           onClick={handleGoogleLogin}
           disabled={isLoading}
+          aria-busy={isLoading}
         >
-          <svg
+          {isLoading ? <span className="loading-spinner" aria-hidden="true" /> : <svg
             className="size-5 shrink-0"
             viewBox="0 0 24 24"
             aria-hidden="true"
@@ -157,14 +172,14 @@ export function LoginPage() {
               fill="#ea4335"
               d="M12 5.94c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.64 9.64 0 0 0 12 2a10 10 0 0 0-8.96 5.45l3.35 2.62C7.18 7.7 9.39 5.94 12 5.94Z"
             />
-          </svg>
+          </svg>}
           {isLoading ? "Opening Google…" : "Continue with Google"}
         </button>
 
         {/* Show setup, OAuth-start, or callback errors reported by the handlers above. */}
         {errorMessage && (
           <p
-            className="mt-5 rounded-2xl bg-[#3c1f1f] px-4 py-3 text-center text-sm leading-5 text-[#f2b8b5]"
+            className="motion-feedback mt-5 rounded-2xl bg-[#3c1f1f] px-4 py-3 text-center text-sm leading-5 text-[#f2b8b5]"
             role="alert"
           >
             {errorMessage}

@@ -23,29 +23,35 @@ export type Subscription = {
 // These callback props let the child notify its parent without owning the list.
 type SubscriptionFormProps = {
   // Sends the completed subscription to the parent.
-  onAddSubscription: (subscription: Subscription) => void;
+  onAddSubscription: (subscription: Subscription) => Promise<void>;
+  // The parent tracks the save request so fields and dismissal stay disabled.
+  isSaving: boolean;
 
   // Tells the parent that the user wants to close the form.
   onCancel: () => void;
 };
 
-// Destructure both functions from the component's props.
+// Read the callbacks and request status from the component's props.
 export function SubscriptionForm({
   onAddSubscription,
   onCancel,
+  isSaving,
 }: SubscriptionFormProps) {
   // Each pair contains the current value and a setter that triggers a render.
   // Keep price as a string so the field can be empty while the user types.
   const [subscriptionName, setSubscriptionName] = useState("");
   const [subscriptionPrice, setSubscriptionPrice] = useState("");
+  const [submitError, setSubmitError] = useState("");
   // Indexed access reuses the union defined on Subscription above.
   const [billingFrequency, setBillingFrequency] =
     useState<Subscription["billingFrequency"]>("monthly");
 
   // Run this function when the user submits the form.
-  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     // Prevent the browser from refreshing the page.
     event.preventDefault();
+    if (isSaving || isFormIncomplete) return;
+    setSubmitError("");
 
     // Combine the input values into one Subscription object.
     const newSubscription: Subscription = {
@@ -62,14 +68,17 @@ export function SubscriptionForm({
       billingFrequency,
     };
 
-    // This calls DashboardPage's handleAddSubscription through the prop.
-    // The parent saves asynchronously; this form does not await the result.
-    onAddSubscription(newSubscription);
-
-    // Reset immediately after calling the parent, before its save completes.
-    setSubscriptionName("");
-    setSubscriptionPrice("");
-    setBillingFrequency("monthly");
+    // Wait for the parent to save. Preserve the inputs if it fails; on success
+    // the parent closes the modal, which resets this form when it unmounts.
+    try {
+      await onAddSubscription(newSubscription);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Couldn’t save this subscription. Please try again.",
+      );
+    }
   }
 
   // Disable submission for blank names/prices or a nonpositive price.
@@ -77,24 +86,31 @@ export function SubscriptionForm({
   const isFormIncomplete =
     subscriptionName.trim() === "" ||
     subscriptionPrice === "" ||
+    !Number.isFinite(Number(subscriptionPrice)) ||
     Number(subscriptionPrice) <= 0;
 
   return (
     <form
       // Run handleSubmit when the form is submitted.
       onSubmit={handleSubmit}
-      className="w-full max-w-lg rounded-3xl bg-[#1e1f20] p-6 shadow-2xl sm:p-8"
+      aria-busy={isSaving}
+      className="subscription-form w-full p-6 sm:p-8"
     >
       {/* Form heading */}
       <div>
-        <h2 className="text-2xl font-normal text-white">Add subscription</h2>
+        <h2 id="add-subscription-title" className="text-2xl font-normal text-white">
+          Add subscription
+        </h2>
         <p className="mt-2 text-sm text-[#c4c7c5]">
           Enter your subscription details.
         </p>
       </div>
 
       {/* Add equal vertical spacing between the fields. */}
-      <div className="mt-8 space-y-6">
+      <fieldset
+        disabled={isSaving}
+        className="subscription-form-fields mt-8 flex min-w-0 flex-col gap-6"
+      >
         {/* value reads React state; onChange saves edits: a controlled input. */}
         <div>
           <label
@@ -107,6 +123,7 @@ export function SubscriptionForm({
 
           <input
             id="subscription-name"
+            data-autofocus
             type="text"
             value={subscriptionName}
             onChange={(event) => {
@@ -116,7 +133,7 @@ export function SubscriptionForm({
             placeholder="Netflix"
             autoComplete="off"
             required
-            className="w-full rounded-xl border border-white/15 bg-[#131416] px-4 py-3 text-white outline-none transition placeholder:text-[#8e918f] focus:border-[#a8c7fa] focus:ring-2 focus:ring-[#a8c7fa]/20"
+            className="motion-field w-full rounded-xl border border-white/15 bg-[#131416] px-4 py-3 text-white outline-none placeholder:text-[#8e918f] focus:border-[#a8c7fa] focus:ring-2 focus:ring-[#a8c7fa]/20"
           />
         </div>
 
@@ -147,7 +164,7 @@ export function SubscriptionForm({
               min="0.01"
               step="0.01"
               required
-              className="w-full rounded-xl border border-white/15 bg-[#131416] py-3 pl-8 pr-4 text-white outline-none transition placeholder:text-[#8e918f] focus:border-[#a8c7fa] focus:ring-2 focus:ring-[#a8c7fa]/20"
+              className="motion-field w-full rounded-xl border border-white/15 bg-[#131416] py-3 pl-8 pr-4 text-white outline-none placeholder:text-[#8e918f] focus:border-[#a8c7fa] focus:ring-2 focus:ring-[#a8c7fa]/20"
             />
           </div>
         </div>
@@ -173,7 +190,7 @@ export function SubscriptionForm({
                   event.target.value as Subscription["billingFrequency"],
                 );
               }}
-              className="w-full appearance-none rounded-xl border border-white/15 bg-[#131416] py-3 pl-4 pr-14 text-white outline-none transition focus:border-[#a8c7fa] focus:ring-2 focus:ring-[#a8c7fa]/20"
+              className="motion-field w-full appearance-none rounded-xl border border-white/15 bg-[#131416] py-3 pl-4 pr-14 text-white outline-none focus:border-[#a8c7fa] focus:ring-2 focus:ring-[#a8c7fa]/20"
             >
               <option value="weekly">Weekly</option>
               <option value="biweekly">Biweekly</option>
@@ -198,15 +215,22 @@ export function SubscriptionForm({
             </svg>
           </div>
         </div>
-      </div>
+      </fieldset>
 
-      {/* Form buttons */}
-      <div className="mt-8 flex justify-end gap-3">
+      {submitError && (
+        <p className="motion-feedback mt-5 rounded-2xl bg-[#3c1f1f] px-4 py-3 text-sm leading-5 text-[#f2b8b5]" role="alert">
+          {submitError}
+        </p>
+      )}
+
+      {/* Wrap the actions when a very narrow window cannot fit both buttons. */}
+      <div className="subscription-form-actions mt-8 flex flex-wrap justify-end gap-3">
         <button
           // This button closes the form without submitting it.
           type="button"
+          disabled={isSaving}
           onClick={onCancel}
-          className="rounded-full px-5 py-3 text-sm font-medium text-[#a8c7fa] transition hover:bg-[#a8c7fa]/10"
+          className="motion-button rounded-full px-5 py-3 text-sm font-medium text-[#a8c7fa] hover:bg-[#a8c7fa]/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Cancel
         </button>
@@ -214,10 +238,11 @@ export function SubscriptionForm({
         <button
           // This button submits the form.
           type="submit"
-          disabled={isFormIncomplete}
-          className="rounded-full bg-[#a8c7fa] px-5 py-3 text-sm font-medium text-[#062e6f] transition hover:bg-[#d3e3fd] disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={isFormIncomplete || isSaving}
+          className="motion-button inline-flex min-w-40 items-center justify-center gap-2 rounded-full bg-[#a8c7fa] px-5 py-3 text-sm font-medium text-[#062e6f] hover:bg-[#d3e3fd] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Add subscription
+          {isSaving && <span className="loading-spinner" aria-hidden="true" />}
+          {isSaving ? "Saving…" : "Add subscription"}
         </button>
       </div>
     </form>

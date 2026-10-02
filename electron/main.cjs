@@ -63,6 +63,8 @@ function createWindow() {
     minHeight: 520,
     title: 'Subscription Tracker',
     backgroundColor: '#0f1115',
+    // Reveal the window after its first painted frame, avoiding a blank flash.
+    show: false,
     // Hide the native title bar; the React TitleBar supplies window controls.
     frame: false,
     webPreferences: {
@@ -72,6 +74,10 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  })
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show()
   })
 
   // Packaged apps use the built frontend; development uses Vite's fixed port.
